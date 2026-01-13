@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'services/report_service.dart';
 import 'screens/home_screen.dart';
 
@@ -20,18 +18,6 @@ class PharmacyReportsApp extends StatelessWidget {
         title: 'تقارير الصيدلية',
         debugShowCheckedModeBanner: false,
         
-        // دعم اللغة العربية
-        locale: const Locale('ar', 'EG'),
-        supportedLocales: const [
-          Locale('ar', 'EG'),
-          Locale('en', 'US'),
-        ],
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        
         // الثيم
         theme: ThemeData(
           useMaterial3: true,
@@ -39,7 +25,7 @@ class PharmacyReportsApp extends StatelessWidget {
             seedColor: const Color(0xFF1E3C72),
             brightness: Brightness.light,
           ),
-          textTheme: GoogleFonts.cairoTextTheme(),
+          fontFamily: 'Cairo',
           appBarTheme: const AppBarTheme(
             centerTitle: true,
             elevation: 0,

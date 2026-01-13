@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../models/report_models.dart';
 import '../services/report_service.dart';
 import 'daily_screen.dart';
 import 'shortages_screen.dart';
