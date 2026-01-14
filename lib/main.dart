@@ -17,8 +17,6 @@ class PharmacyReportsApp extends StatelessWidget {
       child: MaterialApp(
         title: 'تقارير الصيدلية',
         debugShowCheckedModeBanner: false,
-        
-        // الثيم
         theme: ThemeData(
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(
@@ -38,17 +36,7 @@ class PharmacyReportsApp extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          inputDecorationTheme: InputDecorationTheme(
-            filled: true,
-            fillColor: Colors.grey.shade100,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          ),
         ),
-        
         home: const HomeScreen(),
       ),
     );

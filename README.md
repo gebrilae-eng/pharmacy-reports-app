@@ -1,114 +1,87 @@
-# تطبيق تقارير الصيدلية - Flutter
+# تطبيق تقارير الصيدلية - Rx
 
-تطبيق موبايل لعرض تقارير نظام إدارة الصيدلية.
+تطبيق موبايل لعرض تقارير نظام إدارة الصيدلية لعدة صيدليات.
+
+---
+
+## المميزات
+
+- شعار Rx احترافي
+- دعم عدة صيدليات
+- بحث موحد في جميع الصيدليات
+- 4 تقارير لكل صيدلية:
+  - الجرد اليومي
+  - النواقص
+  - المخزون
+  - بيان الأرصدة
+- متوسط الاستهلاك اليومي
+- إجمالي الرصيد من جميع الصيدليات
+- طباعة/مشاركة PDF
+- فلترة حسب الموقع
+- بحث في الأصناف
+
+---
+
+## هيكل المجلدات المتوقع
+
+```
+Google Drive/
+└── My Drive/
+    └── Sync/
+        ├── 1/
+        │   └── MobileReports/
+        │       └── reports.json
+        ├── 2/
+        │   └── MobileReports/
+        │       └── reports.json
+        └── 3/
+            └── MobileReports/
+                └── reports.json
+```
 
 ---
 
 ## بناء APK عبر GitHub Actions
 
-### الخطوات:
-
-#### 1. إنشاء مستودع GitHub جديد
-- اذهب إلى https://github.com/new
-- أنشئ مستودع جديد باسم `pharmacy-reports-app`
-- اتركه فارغاً (بدون README)
-
-#### 2. رفع الملفات إلى GitHub
-افتح Command Prompt في مجلد `mobile-app`:
-
+### 1. رفع الكود
 ```bash
-cd C:\laragon\www\pharmacy-system\mobile-app
-
-git init
+cd mobile-app
 git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin https://github.com/USERNAME/pharmacy-reports-app.git
-git push -u origin main
-```
-**استبدل `USERNAME` باسم حسابك على GitHub**
-
-#### 3. تشغيل البناء
-- اذهب إلى صفحة المستودع على GitHub
-- اضغط على تبويب **Actions**
-- اضغط على **Build Flutter APK**
-- اضغط على **Run workflow** > **Run workflow**
-
-#### 4. تحميل APK
-- انتظر حتى ينتهي البناء (5-10 دقائق)
-- اضغط على الـ workflow الذي انتهى
-- في قسم **Artifacts** ستجد `pharmacy-reports-apk`
-- اضغط لتحميل ملف APK
-
----
-
-## البناء المحلي (يحتاج Flutter SDK)
-
-```bash
-# تثبيت التبعيات
-flutter pub get
-
-# بناء APK
-flutter build apk --release
-
-# الملف الناتج
-build/app/outputs/flutter-apk/app-release.apk
+git commit -m "Update app"
+git push
 ```
 
+### 2. البناء التلقائي
+- اذهب إلى GitHub > Actions
+- سيبدأ البناء تلقائياً
+- انتظر 5-10 دقائق
+
+### 3. تحميل APK
+- بعد نجاح البناء
+- اضغط على workflow
+- حمل من Artifacts
+
 ---
 
-## هيكل المشروع
+## الملفات الرئيسية
 
 ```
-mobile-app/
-├── .github/
-│   └── workflows/
-│       └── build-apk.yml    # GitHub Actions workflow
-├── android/                  # ملفات Android
-├── lib/
-│   ├── main.dart            # نقطة البدء
-│   ├── models/              # موديلات البيانات
-│   ├── services/            # خدمات التطبيق
-│   ├── screens/             # الشاشات
-│   └── widgets/             # الويدجتس
-├── assets/                   # الأصول
-└── pubspec.yaml             # تعريف المشروع
+lib/
+├── main.dart                 # نقطة البدء
+├── models/
+│   └── report_models.dart    # موديلات البيانات
+├── services/
+│   └── report_service.dart   # خدمة التقارير
+└── screens/
+    ├── home_screen.dart           # الصفحة الرئيسية
+    ├── all_pharmacies_screen.dart # البحث الموحد
+    ├── pharmacy_screen.dart       # صفحة الصيدلية
+    └── report_screen.dart         # صفحة التقرير
 ```
-
----
-
-## التقارير المتاحة
-
-| # | التقرير | الوصف |
-|---|---------|-------|
-| 1 | الجرد اليومي | الأصناف المصروفة اليوم |
-| 2 | النواقص | الأصناف تحت الحد الأدنى |
-| 3 | المخزون | جميع الأصناف مع الكميات |
-| 4 | بيان الأرصدة | الأرصدة مع القيم المالية |
-
----
-
-## طريقة الاستخدام
-
-1. افتح التطبيق
-2. اضغط على "اختيار ملف" أو "اختيار مجلد"
-3. حدد ملف `reports.json` من مجلد `MobileReports`
-4. استعرض التقارير المختلفة
-
----
-
-## الميزات
-
-- دعم كامل للغة العربية (RTL)
-- بحث في الأصناف
-- فلترة حسب الموقع
-- تصميم Material Design 3
-- حفظ مسار الملف تلقائياً
-- يعمل Offline
 
 ---
 
 ## الإصدار
 
 - الإصدار: 1.0.0
-- تاريخ الإنشاء: يناير 2026
+- تاريخ التحديث: يناير 2026

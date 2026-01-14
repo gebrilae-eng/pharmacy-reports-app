@@ -1,13 +1,15 @@
-// موديلات بيانات التقارير
+// موديلات البيانات
 
 class ReportMeta {
   final String exportedAt;
+  final String pharmacyId;
   final String pharmacyName;
   final String hospitalName;
   final String directoryName;
 
   ReportMeta({
     required this.exportedAt,
+    required this.pharmacyId,
     required this.pharmacyName,
     required this.hospitalName,
     required this.directoryName,
@@ -16,6 +18,7 @@ class ReportMeta {
   factory ReportMeta.fromJson(Map<String, dynamic> json) {
     return ReportMeta(
       exportedAt: json['exported_at'] ?? '',
+      pharmacyId: json['pharmacy_id']?.toString() ?? '1',
       pharmacyName: json['pharmacy_name'] ?? '',
       hospitalName: json['hospital_name'] ?? '',
       directoryName: json['directory_name'] ?? '',
@@ -32,11 +35,12 @@ class Medicine {
   final String form;
   final String location;
   final int currentStock;
-  final int minStock;
+  final int totalStock;
   final int totalDispensed;
+  final int minStock;
   final double totalValue;
+  final double avgConsumption;
   final String nearestExpiry;
-  final int batches;
 
   Medicine({
     required this.medicineId,
@@ -46,12 +50,13 @@ class Medicine {
     required this.strength,
     required this.form,
     required this.location,
-    this.currentStock = 0,
-    this.minStock = 0,
-    this.totalDispensed = 0,
-    this.totalValue = 0,
-    this.nearestExpiry = '',
-    this.batches = 0,
+    required this.currentStock,
+    required this.totalStock,
+    required this.totalDispensed,
+    required this.minStock,
+    required this.totalValue,
+    required this.avgConsumption,
+    required this.nearestExpiry,
   });
 
   factory Medicine.fromJson(Map<String, dynamic> json) {
@@ -63,48 +68,17 @@ class Medicine {
       strength: json['strength'] ?? '',
       form: json['form'] ?? '',
       location: json['location'] ?? '',
-      currentStock: _parseInt(json['current_stock'] ?? json['total_stock']),
-      minStock: _parseInt(json['min_stock']),
-      totalDispensed: _parseInt(json['total_dispensed']),
-      totalValue: _parseDouble(json['total_value']),
+      currentStock: int.tryParse(json['current_stock']?.toString() ?? '0') ?? 0,
+      totalStock: int.tryParse(json['total_stock']?.toString() ?? '0') ?? 0,
+      totalDispensed: int.tryParse(json['total_dispensed']?.toString() ?? '0') ?? 0,
+      minStock: int.tryParse(json['min_stock']?.toString() ?? '0') ?? 0,
+      totalValue: double.tryParse(json['total_value']?.toString() ?? '0') ?? 0,
+      avgConsumption: double.tryParse(json['avg_consumption']?.toString() ?? '0') ?? 0,
       nearestExpiry: json['nearest_expiry'] ?? '',
-      batches: _parseInt(json['batches']),
     );
   }
 
-  static int _parseInt(dynamic value) {
-    if (value == null) return 0;
-    if (value is int) return value;
-    if (value is double) return value.toInt();
-    if (value is String) return int.tryParse(value) ?? 0;
-    return 0;
-  }
-
-  static double _parseDouble(dynamic value) {
-    if (value == null) return 0.0;
-    if (value is double) return value;
-    if (value is int) return value.toDouble();
-    if (value is String) return double.tryParse(value) ?? 0.0;
-    return 0.0;
-  }
-
-  // الاسم المعروض (العربي أو الإنجليزي)
-  String get displayName => tradeNameAr.isNotEmpty ? tradeNameAr : tradeName;
-  
-  // هل الصنف ناقص؟
-  bool get isShortage => currentStock < minStock;
-  
-  // هل قارب على الانتهاء؟
-  bool get isNearExpiry {
-    if (nearestExpiry.isEmpty) return false;
-    try {
-      final expiry = DateTime.parse(nearestExpiry);
-      final now = DateTime.now();
-      return expiry.difference(now).inDays <= 90;
-    } catch (_) {
-      return false;
-    }
-  }
+  int get stock => currentStock > 0 ? currentStock : totalStock;
 }
 
 class ReportData {
@@ -123,21 +97,20 @@ class ReportData {
       title: json['title'] ?? '',
       date: json['date'] ?? '',
       data: (json['data'] as List<dynamic>?)
-              ?.map((item) => Medicine.fromJson(item))
-              .toList() ??
-          [],
+          ?.map((e) => Medicine.fromJson(e))
+          .toList() ?? [],
     );
   }
 }
 
-class AllReports {
+class PharmacyReports {
   final ReportMeta meta;
   final ReportData dailyInventory;
   final ReportData shortages;
   final ReportData inventoryList;
   final ReportData balanceList;
 
-  AllReports({
+  PharmacyReports({
     required this.meta,
     required this.dailyInventory,
     required this.shortages,
@@ -145,13 +118,36 @@ class AllReports {
     required this.balanceList,
   });
 
-  factory AllReports.fromJson(Map<String, dynamic> json) {
-    return AllReports(
+  factory PharmacyReports.fromJson(Map<String, dynamic> json) {
+    return PharmacyReports(
       meta: ReportMeta.fromJson(json['meta'] ?? {}),
       dailyInventory: ReportData.fromJson(json['daily_inventory'] ?? {}),
       shortages: ReportData.fromJson(json['shortages'] ?? {}),
       inventoryList: ReportData.fromJson(json['inventory_list'] ?? {}),
       balanceList: ReportData.fromJson(json['balance_list'] ?? {}),
+    );
+  }
+}
+
+class Pharmacy {
+  final String id;
+  final String name;
+  final String folderPath;
+  final PharmacyReports? reports;
+
+  Pharmacy({
+    required this.id,
+    required this.name,
+    required this.folderPath,
+    this.reports,
+  });
+
+  Pharmacy copyWith({PharmacyReports? reports}) {
+    return Pharmacy(
+      id: id,
+      name: name,
+      folderPath: folderPath,
+      reports: reports ?? this.reports,
     );
   }
 }
