@@ -17,7 +17,7 @@ class HomeScreen extends StatelessWidget {
           actions: [
             Consumer<ReportService>(
               builder: (context, service, _) {
-                if (service.hasSyncFolder) {
+                if (service.isSignedIn) {
                   return PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert),
                     onSelected: (value) {
@@ -25,6 +25,8 @@ class HomeScreen extends StatelessWidget {
                         service.refresh();
                       } else if (value == 'change') {
                         service.clearFolder();
+                      } else if (value == 'signout') {
+                        service.signOut();
                       }
                     },
                     itemBuilder: (context) => [
@@ -45,6 +47,16 @@ class HomeScreen extends StatelessWidget {
                             Icon(Icons.folder_open, color: Colors.black54),
                             SizedBox(width: 8),
                             Text('تغيير المجلد'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'signout',
+                        child: Row(
+                          children: [
+                            Icon(Icons.logout, color: Colors.black54),
+                            SizedBox(width: 8),
+                            Text('تسجيل الخروج'),
                           ],
                         ),
                       ),
@@ -71,14 +83,22 @@ class HomeScreen extends StatelessWidget {
               );
             }
 
+            // لو مش مسجل دخول
+            if (!service.isSignedIn) {
+              return _buildSignInScreen(context, service);
+            }
+
+            // لو مفيش مجلد Sync محدد
             if (!service.hasSyncFolder) {
               return _buildFolderSelection(context, service);
             }
 
+            // لو فيه خطأ
             if (service.error != null) {
               return _buildError(context, service);
             }
 
+            // عرض الصيدليات
             return _buildPharmacyList(context, service);
           },
         ),
@@ -86,7 +106,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildFolderSelection(BuildContext context, ReportService service) {
+  Widget _buildSignInScreen(BuildContext context, ReportService service) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -135,7 +155,8 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'اختر مجلد Sync من Google Drive',
+              'سجل الدخول بحساب Google للوصول إلى التقارير',
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 16,
                 color: Colors.grey.shade600,
@@ -143,28 +164,112 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 40),
             ElevatedButton.icon(
-              onPressed: () => service.pickSyncFolder(),
-              icon: const Icon(Icons.folder_open),
-              label: const Text('اختيار مجلد Sync'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF1E3C72),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                textStyle: const TextStyle(fontSize: 18),
+              onPressed: () => service.signIn(),
+              icon: Image.network(
+                'https://www.google.com/favicon.ico',
+                width: 24,
+                height: 24,
+                errorBuilder: (_, __, ___) => const Icon(Icons.login),
               ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'المسار المتوقع:\nGoogle Drive > My Drive > Sync',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey.shade500,
+              label: const Text('تسجيل الدخول بـ Google'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black87,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                textStyle: const TextStyle(fontSize: 16),
+                elevation: 2,
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildFolderSelection(BuildContext context, ReportService service) {
+    return FutureBuilder<List<DriveFolder>>(
+      future: service.searchSyncFolders(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('جاري البحث عن مجلد Sync...'),
+              ],
+            ),
+          );
+        }
+
+        final folders = snapshot.data ?? [];
+
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.all(32),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.folder_open,
+                  size: 80,
+                  color: Colors.grey.shade400,
+                ),
+                const SizedBox(height: 24),
+                const Text(
+                  'اختر مجلد Sync',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'تم العثور على ${folders.length} مجلد',
+                  style: TextStyle(color: Colors.grey.shade600),
+                ),
+                const SizedBox(height: 24),
+                if (folders.isEmpty)
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(Icons.warning_amber, color: Colors.orange.shade700),
+                        const SizedBox(height: 8),
+                        Text(
+                          'لم يتم العثور على مجلد Sync\nتأكد من وجود مجلد باسم Sync في Google Drive',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.orange.shade700),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  ...folders.map((folder) => Card(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    child: ListTile(
+                      leading: const Icon(Icons.folder, color: Color(0xFF1E3C72)),
+                      title: Text(folder.name),
+                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                      onTap: () => service.selectSyncFolder(folder.id),
+                    ),
+                  )),
+                const SizedBox(height: 24),
+                TextButton.icon(
+                  onPressed: () => service.signOut(),
+                  icon: const Icon(Icons.logout),
+                  label: const Text('تسجيل الخروج'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -207,6 +312,23 @@ class HomeScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // معلومات المستخدم
+        if (service.currentUser != null)
+          Card(
+            margin: const EdgeInsets.only(bottom: 16),
+            child: ListTile(
+              leading: CircleAvatar(
+                backgroundImage: service.currentUser!.photoUrl != null
+                    ? NetworkImage(service.currentUser!.photoUrl!)
+                    : null,
+                child: service.currentUser!.photoUrl == null
+                    ? const Icon(Icons.person)
+                    : null,
+              ),
+              title: Text(service.currentUser!.displayName ?? ''),
+              subtitle: Text(service.currentUser!.email),
+            ),
+          ),
         // بطاقة "جميع الصيدليات"
         Card(
           color: const Color(0xFF1E3C72),
