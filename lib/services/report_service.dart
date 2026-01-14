@@ -1,152 +1,31 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/report_models.dart';
 
 class ReportService extends ChangeNotifier {
-  // Web Client ID (للحصول على access token)
-  static const String _webClientId = '81937439657-hcqlu6khorhoct7jngr2fes0v0g6811c.apps.googleusercontent.com';
+  // Folder ID من لينك Google Drive
+  static const String _defaultSyncFolderId = '1RFz6EhJdkEVpqAoD7NsvXM_0bqB_dIR3';
   
-  final GoogleSignIn _googleSignIn = GoogleSignIn(
-    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-    serverClientId: _webClientId,
-  );
+  // Google API Key (للقراءة فقط من المجلدات العامة)
+  static const String _apiKey = 'AIzaSyDummy'; // سنستخدم طريقة أخرى
 
-  GoogleSignInAccount? _currentUser;
-  String? _syncFolderId;
   List<Pharmacy> _pharmacies = [];
   bool _isLoading = false;
   String? _error;
-  bool _isSignedIn = false;
+  bool _isInitialized = false;
 
-  GoogleSignInAccount? get currentUser => _currentUser;
-  String? get syncFolderId => _syncFolderId;
   List<Pharmacy> get pharmacies => _pharmacies;
   bool get isLoading => _isLoading;
   String? get error => _error;
-  bool get isSignedIn => _isSignedIn;
-  bool get hasSyncFolder => _syncFolderId != null;
+  bool get isInitialized => _isInitialized;
 
   ReportService() {
-    _init();
-  }
-
-  Future<void> _init() async {
-    _googleSignIn.onCurrentUserChanged.listen((account) {
-      _currentUser = account;
-      _isSignedIn = account != null;
-      notifyListeners();
-    });
-
-    // محاولة تسجيل دخول صامت
-    try {
-      await _googleSignIn.signInSilently();
-      if (_isSignedIn) {
-        await _loadSavedFolderId();
-      }
-    } catch (e) {
-      debugPrint('Silent sign in failed: $e');
-    }
-    notifyListeners();
-  }
-
-  Future<void> _loadSavedFolderId() async {
-    final prefs = await SharedPreferences.getInstance();
-    _syncFolderId = prefs.getString('sync_folder_id');
-    if (_syncFolderId != null) {
-      await loadPharmacies();
-    }
-  }
-
-  Future<void> _saveFolderId(String folderId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('sync_folder_id', folderId);
-  }
-
-  Future<void> signIn() async {
-    try {
-      _isLoading = true;
-      _error = null;
-      notifyListeners();
-
-      final account = await _googleSignIn.signIn();
-      
-      if (account != null) {
-        _currentUser = account;
-        _isSignedIn = true;
-        await _loadSavedFolderId();
-      }
-    } catch (e) {
-      _error = 'فشل تسجيل الدخول: $e';
-      debugPrint('Sign in error: $e');
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> signOut() async {
-    await _googleSignIn.signOut();
-    _currentUser = null;
-    _isSignedIn = false;
-    _syncFolderId = null;
-    _pharmacies = [];
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('sync_folder_id');
-    notifyListeners();
-  }
-
-  Future<Map<String, String>?> _getAuthHeaders() async {
-    final auth = await _currentUser?.authentication;
-    if (auth == null) return null;
-    return {
-      'Authorization': 'Bearer ${auth.accessToken}',
-      'Accept': 'application/json',
-    };
-  }
-
-  // البحث عن مجلد Sync في Google Drive
-  Future<List<DriveFolder>> searchSyncFolders() async {
-    final headers = await _getAuthHeaders();
-    if (headers == null) return [];
-
-    try {
-      // البحث عن مجلدات باسم Sync
-      final query = "name = 'Sync' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
-      final url = Uri.parse(
-        'https://www.googleapis.com/drive/v3/files?q=${Uri.encodeComponent(query)}&fields=files(id,name,parents)'
-      );
-
-      final response = await http.get(url, headers: headers);
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final files = data['files'] as List;
-        return files.map((f) => DriveFolder(
-          id: f['id'],
-          name: f['name'],
-        )).toList();
-      }
-    } catch (e) {
-      debugPrint('Error searching folders: $e');
-    }
-    return [];
-  }
-
-  Future<void> selectSyncFolder(String folderId) async {
-    _syncFolderId = folderId;
-    await _saveFolderId(folderId);
-    await loadPharmacies();
+    loadPharmacies();
   }
 
   Future<void> loadPharmacies() async {
-    if (_syncFolderId == null || !_isSignedIn) return;
-
-    final headers = await _getAuthHeaders();
-    if (headers == null) return;
-
     try {
       _isLoading = true;
       _error = null;
@@ -154,112 +33,229 @@ class ReportService extends ChangeNotifier {
 
       _pharmacies = [];
 
-      // البحث عن المجلدات الفرعية (1, 2, 3, ...)
-      final query = "'$_syncFolderId' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
-      final url = Uri.parse(
-        'https://www.googleapis.com/drive/v3/files?q=${Uri.encodeComponent(query)}&fields=files(id,name)'
+      // قراءة المجلدات الفرعية (1, 2, 3, ...)
+      final foldersUrl = Uri.parse(
+        'https://www.googleapis.com/drive/v3/files'
+        '?q=%27$_defaultSyncFolderId%27+in+parents+and+mimeType%3D%27application%2Fvnd.google-apps.folder%27'
+        '&key=$_apiKey'
+        '&fields=files(id,name)'
       );
 
-      final response = await http.get(url, headers: headers);
+      // بما أن المجلد عام، نحاول القراءة مباشرة
+      // لكن Google Drive API يحتاج API Key
       
-      if (response.statusCode != 200) {
-        _error = 'فشل في قراءة المجلدات';
-        return;
-      }
+      // الحل البديل: قراءة من ملف config ثابت
+      await _loadFromConfig();
 
-      final data = jsonDecode(response.body);
-      final folders = data['files'] as List;
-
-      for (final folder in folders) {
-        final folderId = folder['id'];
-        final folderName = folder['name'];
-
-        // البحث عن مجلد MobileReports
-        final mobileReportsQuery = "'$folderId' in parents and name = 'MobileReports' and mimeType = 'application/vnd.google-apps.folder' and trashed = false";
-        final mrUrl = Uri.parse(
-          'https://www.googleapis.com/drive/v3/files?q=${Uri.encodeComponent(mobileReportsQuery)}&fields=files(id)'
-        );
-        final mrResponse = await http.get(mrUrl, headers: headers);
-
-        if (mrResponse.statusCode == 200) {
-          final mrData = jsonDecode(mrResponse.body);
-          final mrFolders = mrData['files'] as List;
-
-          if (mrFolders.isNotEmpty) {
-            final mrFolderId = mrFolders.first['id'];
-
-            // البحث عن reports.json
-            final jsonQuery = "'$mrFolderId' in parents and name = 'reports.json' and trashed = false";
-            final jsonUrl = Uri.parse(
-              'https://www.googleapis.com/drive/v3/files?q=${Uri.encodeComponent(jsonQuery)}&fields=files(id)'
-            );
-            final jsonResponse = await http.get(jsonUrl, headers: headers);
-
-            if (jsonResponse.statusCode == 200) {
-              final jsonData = jsonDecode(jsonResponse.body);
-              final jsonFiles = jsonData['files'] as List;
-
-              if (jsonFiles.isNotEmpty) {
-                final fileId = jsonFiles.first['id'];
-                
-                // تحميل محتوى الملف
-                final contentUrl = Uri.parse(
-                  'https://www.googleapis.com/drive/v3/files/$fileId?alt=media'
-                );
-                final contentResponse = await http.get(contentUrl, headers: headers);
-
-                if (contentResponse.statusCode == 200) {
-                  try {
-                    final reports = PharmacyReports.fromJson(
-                      jsonDecode(utf8.decode(contentResponse.bodyBytes))
-                    );
-                    
-                    _pharmacies.add(Pharmacy(
-                      id: folderName,
-                      name: reports.meta.pharmacyName.isNotEmpty 
-                          ? reports.meta.pharmacyName 
-                          : 'صيدلية $folderName',
-                      folderPath: folderId,
-                      reports: reports,
-                    ));
-                  } catch (e) {
-                    debugPrint('Error parsing reports for $folderName: $e');
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // ترتيب حسب رقم الصيدلية
-      _pharmacies.sort((a, b) {
-        final aNum = int.tryParse(a.id) ?? 999;
-        final bNum = int.tryParse(b.id) ?? 999;
-        return aNum.compareTo(bNum);
-      });
-
-      if (_pharmacies.isEmpty) {
-        _error = 'لم يتم العثور على أي صيدليات في مجلد Sync';
-      }
+      _isInitialized = true;
     } catch (e) {
       _error = 'خطأ في تحميل البيانات: $e';
+      debugPrint('Load error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
+  Future<void> _loadFromConfig() async {
+    // سنقرأ الصيدليات من ملف JSON مخزن محلياً أو من URL ثابت
+    // المستخدم يمكنه تحميل الملف يدوياً
+    
+    // محاولة قراءة البيانات المحفوظة
+    final prefs = await SharedPreferences.getInstance();
+    final savedData = prefs.getString('pharmacies_data');
+    
+    if (savedData != null) {
+      try {
+        final List<dynamic> dataList = jsonDecode(savedData);
+        _pharmacies = dataList.map((data) {
+          return Pharmacy(
+            id: data['id'],
+            name: data['name'],
+            folderPath: data['folderPath'] ?? '',
+            reports: data['reports'] != null 
+                ? PharmacyReports.fromJson(data['reports'])
+                : null,
+          );
+        }).toList();
+      } catch (e) {
+        debugPrint('Error loading saved data: $e');
+      }
+    }
+  }
+
+  Future<void> loadFromFile(String jsonContent) async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      final data = jsonDecode(jsonContent);
+      
+      if (data is Map<String, dynamic>) {
+        // ملف تقارير صيدلية واحدة
+        final reports = PharmacyReports.fromJson(data);
+        final pharmacyId = reports.meta.pharmacyId;
+        
+        // تحديث أو إضافة الصيدلية
+        final existingIndex = _pharmacies.indexWhere((p) => p.id == pharmacyId);
+        final pharmacy = Pharmacy(
+          id: pharmacyId,
+          name: reports.meta.pharmacyName.isNotEmpty 
+              ? reports.meta.pharmacyName 
+              : 'صيدلية $pharmacyId',
+          folderPath: '',
+          reports: reports,
+        );
+        
+        if (existingIndex >= 0) {
+          _pharmacies[existingIndex] = pharmacy;
+        } else {
+          _pharmacies.add(pharmacy);
+        }
+        
+        // ترتيب
+        _pharmacies.sort((a, b) {
+          final aNum = int.tryParse(a.id) ?? 999;
+          final bNum = int.tryParse(b.id) ?? 999;
+          return aNum.compareTo(bNum);
+        });
+        
+        // حفظ البيانات
+        await _saveData();
+      }
+
+      _isInitialized = true;
+    } catch (e) {
+      _error = 'خطأ في قراءة الملف: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadMultipleFiles(List<String> jsonContents) async {
+    try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
+      for (final content in jsonContents) {
+        try {
+          final data = jsonDecode(content);
+          if (data is Map<String, dynamic>) {
+            final reports = PharmacyReports.fromJson(data);
+            final pharmacyId = reports.meta.pharmacyId;
+            
+            final existingIndex = _pharmacies.indexWhere((p) => p.id == pharmacyId);
+            final pharmacy = Pharmacy(
+              id: pharmacyId,
+              name: reports.meta.pharmacyName.isNotEmpty 
+                  ? reports.meta.pharmacyName 
+                  : 'صيدلية $pharmacyId',
+              folderPath: '',
+              reports: reports,
+            );
+            
+            if (existingIndex >= 0) {
+              _pharmacies[existingIndex] = pharmacy;
+            } else {
+              _pharmacies.add(pharmacy);
+            }
+          }
+        } catch (e) {
+          debugPrint('Error parsing file: $e');
+        }
+      }
+
+      _pharmacies.sort((a, b) {
+        final aNum = int.tryParse(a.id) ?? 999;
+        final bNum = int.tryParse(b.id) ?? 999;
+        return aNum.compareTo(bNum);
+      });
+
+      await _saveData();
+      _isInitialized = true;
+    } catch (e) {
+      _error = 'خطأ في قراءة الملفات: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _saveData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final dataList = _pharmacies.map((p) => {
+      'id': p.id,
+      'name': p.name,
+      'folderPath': p.folderPath,
+      'reports': p.reports != null ? _reportsToJson(p.reports!) : null,
+    }).toList();
+    await prefs.setString('pharmacies_data', jsonEncode(dataList));
+  }
+
+  Map<String, dynamic> _reportsToJson(PharmacyReports reports) {
+    return {
+      'meta': {
+        'exported_at': reports.meta.exportedAt,
+        'pharmacy_id': reports.meta.pharmacyId,
+        'pharmacy_name': reports.meta.pharmacyName,
+        'hospital_name': reports.meta.hospitalName,
+        'directory_name': reports.meta.directoryName,
+      },
+      'daily_inventory': {
+        'title': reports.dailyInventory.title,
+        'date': reports.dailyInventory.date,
+        'data': reports.dailyInventory.data.map((m) => _medicineToJson(m)).toList(),
+      },
+      'shortages': {
+        'title': reports.shortages.title,
+        'date': reports.shortages.date,
+        'data': reports.shortages.data.map((m) => _medicineToJson(m)).toList(),
+      },
+      'inventory_list': {
+        'title': reports.inventoryList.title,
+        'date': reports.inventoryList.date,
+        'data': reports.inventoryList.data.map((m) => _medicineToJson(m)).toList(),
+      },
+      'balance_list': {
+        'title': reports.balanceList.title,
+        'date': reports.balanceList.date,
+        'data': reports.balanceList.data.map((m) => _medicineToJson(m)).toList(),
+      },
+    };
+  }
+
+  Map<String, dynamic> _medicineToJson(Medicine m) {
+    return {
+      'medicine_id': m.medicineId,
+      'trade_name': m.tradeName,
+      'trade_name_ar': m.tradeNameAr,
+      'generic_name': m.genericName,
+      'strength': m.strength,
+      'form': m.form,
+      'location': m.location,
+      'current_stock': m.currentStock,
+      'total_stock': m.totalStock,
+      'total_dispensed': m.totalDispensed,
+      'min_stock': m.minStock,
+      'total_value': m.totalValue,
+      'avg_consumption': m.avgConsumption,
+      'nearest_expiry': m.nearestExpiry,
+    };
+  }
+
   Future<void> refresh() async {
+    // إعادة تحميل من الملفات المحفوظة
     await loadPharmacies();
   }
 
-  void clearFolder() {
-    _syncFolderId = null;
+  void clearData() {
     _pharmacies = [];
     _error = null;
     SharedPreferences.getInstance().then((prefs) {
-      prefs.remove('sync_folder_id');
+      prefs.remove('pharmacies_data');
     });
     notifyListeners();
   }
@@ -288,13 +284,6 @@ class ReportService extends ChangeNotifier {
 
     return results;
   }
-}
-
-class DriveFolder {
-  final String id;
-  final String name;
-
-  DriveFolder({required this.id, required this.name});
 }
 
 class MedicineWithPharmacy {

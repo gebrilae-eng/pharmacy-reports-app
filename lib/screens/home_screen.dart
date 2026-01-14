@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:file_picker/file_picker.dart';
 import '../services/report_service.dart';
 import 'all_pharmacies_screen.dart';
 import 'pharmacy_screen.dart';
@@ -17,53 +19,51 @@ class HomeScreen extends StatelessWidget {
           actions: [
             Consumer<ReportService>(
               builder: (context, service, _) {
-                if (service.isSignedIn) {
-                  return PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert),
-                    onSelected: (value) {
-                      if (value == 'refresh') {
-                        service.refresh();
-                      } else if (value == 'change') {
-                        service.clearFolder();
-                      } else if (value == 'signout') {
-                        service.signOut();
-                      }
-                    },
-                    itemBuilder: (context) => [
+                return PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert),
+                  onSelected: (value) async {
+                    if (value == 'add') {
+                      await _pickFiles(context, service);
+                    } else if (value == 'refresh') {
+                      service.refresh();
+                    } else if (value == 'clear') {
+                      _showClearDialog(context, service);
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    const PopupMenuItem(
+                      value: 'add',
+                      child: Row(
+                        children: [
+                          Icon(Icons.add, color: Colors.black54),
+                          SizedBox(width: 8),
+                          Text('إضافة صيدلية'),
+                        ],
+                      ),
+                    ),
+                    const PopupMenuItem(
+                      value: 'refresh',
+                      child: Row(
+                        children: [
+                          Icon(Icons.refresh, color: Colors.black54),
+                          SizedBox(width: 8),
+                          Text('تحديث'),
+                        ],
+                      ),
+                    ),
+                    if (service.pharmacies.isNotEmpty)
                       const PopupMenuItem(
-                        value: 'refresh',
+                        value: 'clear',
                         child: Row(
                           children: [
-                            Icon(Icons.refresh, color: Colors.black54),
+                            Icon(Icons.delete_outline, color: Colors.red),
                             SizedBox(width: 8),
-                            Text('تحديث البيانات'),
+                            Text('مسح البيانات', style: TextStyle(color: Colors.red)),
                           ],
                         ),
                       ),
-                      const PopupMenuItem(
-                        value: 'change',
-                        child: Row(
-                          children: [
-                            Icon(Icons.folder_open, color: Colors.black54),
-                            SizedBox(width: 8),
-                            Text('تغيير المجلد'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'signout',
-                        child: Row(
-                          children: [
-                            Icon(Icons.logout, color: Colors.black54),
-                            SizedBox(width: 8),
-                            Text('تسجيل الخروج'),
-                          ],
-                        ),
-                      ),
-                    ],
-                  );
-                }
-                return const SizedBox.shrink();
+                  ],
+                );
               },
             ),
           ],
@@ -83,30 +83,99 @@ class HomeScreen extends StatelessWidget {
               );
             }
 
-            // لو مش مسجل دخول
-            if (!service.isSignedIn) {
-              return _buildSignInScreen(context, service);
+            if (service.pharmacies.isEmpty) {
+              return _buildEmptyState(context, service);
             }
 
-            // لو مفيش مجلد Sync محدد
-            if (!service.hasSyncFolder) {
-              return _buildFolderSelection(context, service);
-            }
-
-            // لو فيه خطأ
             if (service.error != null) {
               return _buildError(context, service);
             }
 
-            // عرض الصيدليات
             return _buildPharmacyList(context, service);
+          },
+        ),
+        floatingActionButton: Consumer<ReportService>(
+          builder: (context, service, _) {
+            if (service.pharmacies.isEmpty) return const SizedBox();
+            return FloatingActionButton.extended(
+              onPressed: () => _pickFiles(context, service),
+              icon: const Icon(Icons.add),
+              label: const Text('إضافة صيدلية'),
+              backgroundColor: const Color(0xFF1E3C72),
+            );
           },
         ),
       ),
     );
   }
 
-  Widget _buildSignInScreen(BuildContext context, ReportService service) {
+  Future<void> _pickFiles(BuildContext context, ReportService service) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        allowMultiple: true,
+      );
+
+      if (result != null && result.files.isNotEmpty) {
+        final contents = <String>[];
+        
+        for (final file in result.files) {
+          if (file.path != null) {
+            final content = await File(file.path!).readAsString();
+            contents.add(content);
+          }
+        }
+
+        if (contents.isNotEmpty) {
+          await service.loadMultipleFiles(contents);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('تم تحميل ${contents.length} ملف'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showClearDialog(BuildContext context, ReportService service) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('مسح البيانات'),
+        content: const Text('هل أنت متأكد من مسح جميع بيانات الصيدليات؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('إلغاء'),
+          ),
+          TextButton(
+            onPressed: () {
+              service.clearData();
+              Navigator.pop(context);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('مسح'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context, ReportService service) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -155,7 +224,7 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             Text(
-              'سجل الدخول بحساب Google للوصول إلى التقارير',
+              'قم بتحميل ملفات التقارير من مجلد MobileReports',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 16,
@@ -164,112 +233,41 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 40),
             ElevatedButton.icon(
-              onPressed: () => service.signIn(),
-              icon: Image.network(
-                'https://www.google.com/favicon.ico',
-                width: 24,
-                height: 24,
-                errorBuilder: (_, __, ___) => const Icon(Icons.login),
-              ),
-              label: const Text('تسجيل الدخول بـ Google'),
+              onPressed: () => _pickFiles(context, service),
+              icon: const Icon(Icons.folder_open),
+              label: const Text('اختيار ملفات التقارير'),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black87,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                textStyle: const TextStyle(fontSize: 16),
-                elevation: 2,
+                backgroundColor: const Color(0xFF1E3C72),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                textStyle: const TextStyle(fontSize: 18),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.blue.shade50,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.info_outline, color: Colors.blue.shade700),
+                  const SizedBox(height: 8),
+                  Text(
+                    'المسار المتوقع للملفات:\nGoogle Drive > Sync > [رقم الصيدلية] > MobileReports > reports.json',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blue.shade700,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildFolderSelection(BuildContext context, ReportService service) {
-    return FutureBuilder<List<DriveFolder>>(
-      future: service.searchSyncFolders(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('جاري البحث عن مجلد Sync...'),
-              ],
-            ),
-          );
-        }
-
-        final folders = snapshot.data ?? [];
-
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.folder_open,
-                  size: 80,
-                  color: Colors.grey.shade400,
-                ),
-                const SizedBox(height: 24),
-                const Text(
-                  'اختر مجلد Sync',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'تم العثور على ${folders.length} مجلد',
-                  style: TextStyle(color: Colors.grey.shade600),
-                ),
-                const SizedBox(height: 24),
-                if (folders.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(Icons.warning_amber, color: Colors.orange.shade700),
-                        const SizedBox(height: 8),
-                        Text(
-                          'لم يتم العثور على مجلد Sync\nتأكد من وجود مجلد باسم Sync في Google Drive',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.orange.shade700),
-                        ),
-                      ],
-                    ),
-                  )
-                else
-                  ...folders.map((folder) => Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      leading: const Icon(Icons.folder, color: Color(0xFF1E3C72)),
-                      title: Text(folder.name),
-                      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                      onTap: () => service.selectSyncFolder(folder.id),
-                    ),
-                  )),
-                const SizedBox(height: 24),
-                TextButton.icon(
-                  onPressed: () => service.signOut(),
-                  icon: const Icon(Icons.logout),
-                  label: const Text('تسجيل الخروج'),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 
@@ -293,14 +291,9 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: () => service.refresh(),
-              icon: const Icon(Icons.refresh),
-              label: const Text('إعادة المحاولة'),
-            ),
-            const SizedBox(height: 12),
-            TextButton(
-              onPressed: () => service.clearFolder(),
-              child: const Text('تغيير المجلد'),
+              onPressed: () => _pickFiles(context, service),
+              icon: const Icon(Icons.folder_open),
+              label: const Text('اختيار ملفات'),
             ),
           ],
         ),
@@ -312,23 +305,6 @@ class HomeScreen extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // معلومات المستخدم
-        if (service.currentUser != null)
-          Card(
-            margin: const EdgeInsets.only(bottom: 16),
-            child: ListTile(
-              leading: CircleAvatar(
-                backgroundImage: service.currentUser!.photoUrl != null
-                    ? NetworkImage(service.currentUser!.photoUrl!)
-                    : null,
-                child: service.currentUser!.photoUrl == null
-                    ? const Icon(Icons.person)
-                    : null,
-              ),
-              title: Text(service.currentUser!.displayName ?? ''),
-              subtitle: Text(service.currentUser!.email),
-            ),
-          ),
         // بطاقة "جميع الصيدليات"
         Card(
           color: const Color(0xFF1E3C72),
@@ -356,7 +332,7 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
             subtitle: Text(
-              'بحث موحد في ${service.pharmacies.length} صيدليات',
+              'بحث موحد في ${service.pharmacies.length} صيدلية',
               style: TextStyle(
                 color: Colors.white.withOpacity(0.8),
               ),
@@ -376,12 +352,23 @@ class HomeScreen extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        const Text(
-          'الصيدليات',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text(
+              'الصيدليات',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            Text(
+              '${service.pharmacies.length} صيدلية',
+              style: TextStyle(
+                color: Colors.grey.shade600,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
         // قائمة الصيدليات
@@ -412,9 +399,21 @@ class HomeScreen extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             subtitle: pharmacy.reports != null
-                ? Text(
-                    '${pharmacy.reports!.inventoryList.data.length} صنف',
-                    style: TextStyle(color: Colors.grey.shade600),
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${pharmacy.reports!.inventoryList.data.length} صنف',
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
+                      Text(
+                        'آخر تحديث: ${pharmacy.reports!.meta.exportedAt}',
+                        style: TextStyle(
+                          color: Colors.grey.shade500,
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
                   )
                 : null,
             trailing: const Icon(Icons.arrow_forward_ios, size: 16),
@@ -428,6 +427,7 @@ class HomeScreen extends StatelessWidget {
             },
           ),
         )),
+        const SizedBox(height: 80), // مساحة للـ FAB
       ],
     );
   }
