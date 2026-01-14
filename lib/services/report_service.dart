@@ -6,11 +6,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/report_models.dart';
 
 class ReportService extends ChangeNotifier {
-  static const String _clientId = '81937439657-hcqlu6khorhoct7jngr2fes0v0g6811c.apps.googleusercontent.com';
+  // Web Client ID (للحصول على access token)
+  static const String _webClientId = '81937439657-hcqlu6khorhoct7jngr2fes0v0g6811c.apps.googleusercontent.com';
   
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: ['https://www.googleapis.com/auth/drive.readonly'],
-    serverClientId: _clientId,
+    serverClientId: _webClientId,
   );
 
   GoogleSignInAccount? _currentUser;
@@ -70,13 +71,16 @@ class ReportService extends ChangeNotifier {
       _error = null;
       notifyListeners();
 
-      await _googleSignIn.signIn();
+      final account = await _googleSignIn.signIn();
       
-      if (_isSignedIn) {
+      if (account != null) {
+        _currentUser = account;
+        _isSignedIn = true;
         await _loadSavedFolderId();
       }
     } catch (e) {
       _error = 'فشل تسجيل الدخول: $e';
+      debugPrint('Sign in error: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -85,6 +89,8 @@ class ReportService extends ChangeNotifier {
 
   Future<void> signOut() async {
     await _googleSignIn.signOut();
+    _currentUser = null;
+    _isSignedIn = false;
     _syncFolderId = null;
     _pharmacies = [];
     final prefs = await SharedPreferences.getInstance();
