@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'dart:typed_data'; // تم إضافة هذه المكتبة
 import '../models/report_models.dart';
 
 class ReportScreen extends StatefulWidget {
@@ -449,12 +450,14 @@ class _ReportScreenState extends State<ReportScreen> {
 
   Future<void> _printReport() async {
     final pdf = await _generatePdf();
-    await Printing.layoutPdf(onLayout: (format) => pdf);
+    // تم التعديل هنا: تحويل البيانات إلى Uint8List
+    await Printing.layoutPdf(onLayout: (format) => Uint8List.fromList(pdf));
   }
 
   Future<void> _shareReport() async {
     final pdf = await _generatePdf();
-    await Printing.sharePdf(bytes: pdf, filename: '${_title}.pdf');
+    // تم التعديل هنا: تحويل البيانات إلى Uint8List
+    await Printing.sharePdf(bytes: Uint8List.fromList(pdf), filename: '${_title}.pdf');
   }
 
   Future<List<int>> _generatePdf() async {
