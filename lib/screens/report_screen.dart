@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'dart:typed_data'; // تم إضافة هذه المكتبة
 import '../models/report_models.dart';
 
 class ReportScreen extends StatefulWidget {
@@ -116,7 +115,6 @@ class _ReportScreenState extends State<ReportScreen> {
         ),
         body: Column(
           children: [
-            // شريط البحث والفلترة
             Container(
               padding: const EdgeInsets.all(12),
               color: Colors.grey.shade100,
@@ -162,9 +160,20 @@ class _ReportScreenState extends State<ReportScreen> {
                 ],
               ),
             ),
-            // ملخص
-            _buildSummary(),
-            // القائمة
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Text(
+                    '${_filteredItems.length} صنف',
+                    style: TextStyle(
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
             Expanded(
               child: _filteredItems.isEmpty
                   ? Center(
@@ -174,7 +183,7 @@ class _ReportScreenState extends State<ReportScreen> {
                       ),
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
                       itemCount: _filteredItems.length,
                       itemBuilder: (context, index) {
                         return _buildItemCard(_filteredItems[index]);
@@ -206,83 +215,6 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  Widget _buildSummary() {
-    int totalStock = 0;
-    double totalValue = 0;
-    int totalDispensed = 0;
-
-    for (final item in _filteredItems) {
-      totalStock += item.stock;
-      totalValue += item.totalValue;
-      totalDispensed += item.totalDispensed;
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
-        children: [
-          _buildSummaryItem(
-            icon: Icons.inventory_2,
-            label: 'الأصناف',
-            value: '${_filteredItems.length}',
-            color: _color,
-          ),
-          if (widget.type == 'daily')
-            _buildSummaryItem(
-              icon: Icons.shopping_cart,
-              label: 'المصروف',
-              value: '$totalDispensed',
-              color: Colors.orange,
-            )
-          else
-            _buildSummaryItem(
-              icon: Icons.storage,
-              label: 'إجمالي الكمية',
-              value: '$totalStock',
-              color: Colors.blue,
-            ),
-          if (widget.type == 'balance')
-            _buildSummaryItem(
-              icon: Icons.attach_money,
-              label: 'القيمة',
-              value: totalValue.toStringAsFixed(0),
-              color: Colors.purple,
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryItem({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 24),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            fontSize: 18,
-            color: color,
-          ),
-        ),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey.shade600,
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildItemCard(Medicine item) {
     final isShortage = widget.type == 'shortages' ||
         (item.minStock > 0 && item.stock < item.minStock);
@@ -301,30 +233,50 @@ class _ReportScreenState extends State<ReportScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: Text(
-                    item.tradeNameAr.isNotEmpty
-                        ? item.tradeNameAr
-                        : item.tradeName,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.tradeNameAr.isNotEmpty
+                            ? item.tradeNameAr
+                            : item.tradeName,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                      if (item.tradeName.isNotEmpty && item.tradeNameAr.isNotEmpty)
+                        Text(
+                          item.tradeName,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      if (item.genericName.isNotEmpty)
+                        Text(
+                          item.genericName,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey.shade500,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 if (item.form.isNotEmpty || item.strength.isNotEmpty)
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.grey.shade200,
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      [item.strength, item.form]
-                          .where((s) => s.isNotEmpty)
-                          .join(' '),
+                      [item.strength, item.form].where((s) => s.isNotEmpty).join(' '),
                       style: TextStyle(
                         fontSize: 11,
                         color: Colors.grey.shade700,
@@ -333,66 +285,82 @@ class _ReportScreenState extends State<ReportScreen> {
                   ),
               ],
             ),
-            if (item.tradeName.isNotEmpty && item.tradeNameAr.isNotEmpty)
-              Text(
-                item.tradeName,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey.shade600,
-                ),
+            const SizedBox(height: 10),
+            _buildDataRow(item),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDataRow(Medicine item) {
+    switch (widget.type) {
+      case 'daily':
+        return Row(
+          children: [
+            _buildDataItem('الرصيد', '${item.stock}', Colors.blue),
+            _buildDataItem('المصروف', '${item.totalDispensed}', Colors.orange),
+            _buildDataItem('المتوسط', item.avgConsumption.toStringAsFixed(1), Colors.teal),
+            _buildDataItem('الكفاية', item.coverageText, Colors.purple),
+          ],
+        );
+      case 'shortages':
+        return Row(
+          children: [
+            _buildDataItem('الرصيد', '${item.stock}', Colors.red),
+            _buildDataItem('المتوسط', item.avgConsumption.toStringAsFixed(1), Colors.teal),
+            _buildDataItem('الكفاية', item.coverageText, Colors.purple),
+          ],
+        );
+      case 'inventory':
+        return Row(
+          children: [
+            _buildDataItem('الرصيد', '${item.stock}', Colors.blue),
+            _buildDataItem('المتوسط', item.avgConsumption.toStringAsFixed(1), Colors.teal),
+            _buildDataItem('الكفاية', item.coverageText, Colors.purple),
+          ],
+        );
+      case 'balance':
+        return Row(
+          children: [
+            _buildDataItem('الرصيد', '${item.stock}', Colors.blue),
+            _buildDataItem('المتوسط', item.avgConsumption.toStringAsFixed(1), Colors.teal),
+          ],
+        );
+      default:
+        return Row(
+          children: [
+            _buildDataItem('الرصيد', '${item.stock}', Colors.blue),
+          ],
+        );
+    }
+  }
+
+  Widget _buildDataItem(String label, String value, Color color) {
+    return Expanded(
+      child: Container(
+        margin: const EdgeInsets.only(left: 6),
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Column(
+          children: [
+            Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+                color: color,
               ),
-            if (item.genericName.isNotEmpty)
-              Text(
-                item.genericName,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade500,
-                  fontStyle: FontStyle.italic,
-                ),
+            ),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                color: color.withOpacity(0.8),
               ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: [
-                _buildChip(
-                  icon: Icons.inventory_2,
-                  label: 'الرصيد: ${item.stock}',
-                  color: isShortage ? Colors.red : Colors.blue,
-                ),
-                if (widget.type == 'daily' && item.totalDispensed > 0)
-                  _buildChip(
-                    icon: Icons.shopping_cart,
-                    label: 'مصروف: ${item.totalDispensed}',
-                    color: Colors.orange,
-                  ),
-                if (item.avgConsumption > 0)
-                  _buildChip(
-                    icon: Icons.trending_down,
-                    label: 'متوسط: ${item.avgConsumption.toStringAsFixed(1)}/يوم',
-                    color: Colors.teal,
-                  ),
-                if (widget.type == 'shortages' && item.minStock > 0)
-                  _buildChip(
-                    icon: Icons.warning,
-                    label: 'الحد الأدنى: ${item.minStock}',
-                    color: Colors.grey,
-                  ),
-                if (widget.type == 'balance' && item.totalValue > 0)
-                  _buildChip(
-                    icon: Icons.attach_money,
-                    label: 'القيمة: ${item.totalValue.toStringAsFixed(2)}',
-                    color: Colors.purple,
-                  ),
-                if (item.nearestExpiry.isNotEmpty)
-                  _buildChip(
-                    icon: Icons.event,
-                    label: 'الصلاحية: ${_formatDate(item.nearestExpiry)}',
-                    color: _isNearExpiry(item.nearestExpiry)
-                        ? Colors.orange
-                        : Colors.green,
-                  ),
-              ],
             ),
           ],
         ),
@@ -400,64 +368,14 @@ class _ReportScreenState extends State<ReportScreen> {
     );
   }
 
-  Widget _buildChip({
-    required IconData icon,
-    required String label,
-    required Color color,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: color,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatDate(String dateStr) {
-    try {
-      final date = DateTime.parse(dateStr);
-      return '${date.month}/${date.year}';
-    } catch (_) {
-      return dateStr;
-    }
-  }
-
-  bool _isNearExpiry(String dateStr) {
-    try {
-      final date = DateTime.parse(dateStr);
-      final diff = date.difference(DateTime.now()).inDays;
-      return diff <= 90;
-    } catch (_) {
-      return false;
-    }
-  }
-
   Future<void> _printReport() async {
     final pdf = await _generatePdf();
-    // تم التعديل هنا: تحويل البيانات إلى Uint8List
-    await Printing.layoutPdf(onLayout: (format) => Uint8List.fromList(pdf));
+    await Printing.layoutPdf(onLayout: (format) => pdf);
   }
 
   Future<void> _shareReport() async {
     final pdf = await _generatePdf();
-    // تم التعديل هنا: تحويل البيانات إلى Uint8List
-    await Printing.sharePdf(bytes: Uint8List.fromList(pdf), filename: '${_title}.pdf');
+    await Printing.sharePdf(bytes: pdf, filename: '$_title.pdf');
   }
 
   Future<List<int>> _generatePdf() async {
@@ -480,27 +398,12 @@ class _ReportScreenState extends State<ReportScreen> {
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Text(
-                  widget.pharmacyName,
-                  style: pw.TextStyle(
-                    font: arabicBoldFont,
-                    fontSize: 16,
-                  ),
-                ),
-                pw.Text(
-                  _title,
-                  style: pw.TextStyle(
-                    font: arabicBoldFont,
-                    fontSize: 18,
-                  ),
-                ),
+                pw.Text(widget.pharmacyName, style: pw.TextStyle(font: arabicBoldFont, fontSize: 16)),
+                pw.Text(_title, style: pw.TextStyle(font: arabicBoldFont, fontSize: 18)),
               ],
             ),
             pw.SizedBox(height: 4),
-            pw.Text(
-              'التاريخ: ${widget.reportData.date}',
-              style: pw.TextStyle(font: arabicFont, fontSize: 10),
-            ),
+            pw.Text('التاريخ: ${widget.reportData.date}', style: pw.TextStyle(font: arabicFont, fontSize: 10)),
             pw.Divider(),
             pw.SizedBox(height: 8),
           ],
@@ -508,36 +411,16 @@ class _ReportScreenState extends State<ReportScreen> {
         footer: (context) => pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           children: [
-            pw.Text(
-              'صفحة ${context.pageNumber} من ${context.pagesCount}',
-              style: pw.TextStyle(font: arabicFont, fontSize: 10),
-            ),
-            pw.Text(
-              'Rx تقارير الصيدلية',
-              style: pw.TextStyle(font: arabicFont, fontSize: 10),
-            ),
+            pw.Text('صفحة ${context.pageNumber} من ${context.pagesCount}', style: pw.TextStyle(font: arabicFont, fontSize: 10)),
+            pw.Text('Rx تقارير الصيدلية', style: pw.TextStyle(font: arabicFont, fontSize: 10)),
           ],
         ),
         build: (context) => [
           pw.Table.fromTextArray(
             context: context,
-            headerStyle: pw.TextStyle(
-              font: arabicBoldFont,
-              fontSize: 10,
-            ),
-            cellStyle: pw.TextStyle(
-              font: arabicFont,
-              fontSize: 9,
-            ),
-            headerDecoration: const pw.BoxDecoration(
-              color: PdfColors.grey300,
-            ),
-            cellAlignments: {
-              0: pw.Alignment.centerRight,
-              1: pw.Alignment.centerRight,
-              2: pw.Alignment.center,
-              3: pw.Alignment.center,
-            },
+            headerStyle: pw.TextStyle(font: arabicBoldFont, fontSize: 10),
+            cellStyle: pw.TextStyle(font: arabicFont, fontSize: 9),
+            headerDecoration: const pw.BoxDecoration(color: PdfColors.grey300),
             headers: _getHeaders(),
             data: _filteredItems.map((item) => _getRowData(item)).toList(),
           ),
@@ -551,13 +434,15 @@ class _ReportScreenState extends State<ReportScreen> {
   List<String> _getHeaders() {
     switch (widget.type) {
       case 'daily':
-        return ['الاسم', 'المادة الفعالة', 'الرصيد', 'المصروف', 'المتوسط'];
+        return ['الاسم', 'الرصيد', 'المصروف', 'المتوسط', 'الكفاية'];
       case 'shortages':
-        return ['الاسم', 'المادة الفعالة', 'الرصيد', 'الحد الأدنى', 'المتوسط'];
+        return ['الاسم', 'الرصيد', 'المتوسط', 'الكفاية'];
+      case 'inventory':
+        return ['الاسم', 'الرصيد', 'المتوسط', 'الكفاية'];
       case 'balance':
-        return ['الاسم', 'المادة الفعالة', 'الرصيد', 'القيمة', 'المتوسط'];
+        return ['الاسم', 'الرصيد', 'المتوسط'];
       default:
-        return ['الاسم', 'المادة الفعالة', 'الرصيد', 'الصلاحية', 'المتوسط'];
+        return ['الاسم', 'الرصيد'];
     }
   }
 
@@ -565,37 +450,15 @@ class _ReportScreenState extends State<ReportScreen> {
     final name = item.tradeNameAr.isNotEmpty ? item.tradeNameAr : item.tradeName;
     switch (widget.type) {
       case 'daily':
-        return [
-          name,
-          item.genericName,
-          '${item.stock}',
-          '${item.totalDispensed}',
-          item.avgConsumption.toStringAsFixed(1),
-        ];
+        return [name, '${item.stock}', '${item.totalDispensed}', item.avgConsumption.toStringAsFixed(1), item.coverageText];
       case 'shortages':
-        return [
-          name,
-          item.genericName,
-          '${item.stock}',
-          '${item.minStock}',
-          item.avgConsumption.toStringAsFixed(1),
-        ];
+        return [name, '${item.stock}', item.avgConsumption.toStringAsFixed(1), item.coverageText];
+      case 'inventory':
+        return [name, '${item.stock}', item.avgConsumption.toStringAsFixed(1), item.coverageText];
       case 'balance':
-        return [
-          name,
-          item.genericName,
-          '${item.stock}',
-          item.totalValue.toStringAsFixed(2),
-          item.avgConsumption.toStringAsFixed(1),
-        ];
+        return [name, '${item.stock}', item.avgConsumption.toStringAsFixed(1)];
       default:
-        return [
-          name,
-          item.genericName,
-          '${item.stock}',
-          _formatDate(item.nearestExpiry),
-          item.avgConsumption.toStringAsFixed(1),
-        ];
+        return [name, '${item.stock}'];
     }
   }
 }

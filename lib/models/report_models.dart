@@ -40,6 +40,7 @@ class Medicine {
   final int minStock;
   final double totalValue;
   final double avgConsumption;
+  final int coverageDays;
   final String nearestExpiry;
 
   Medicine({
@@ -56,6 +57,7 @@ class Medicine {
     required this.minStock,
     required this.totalValue,
     required this.avgConsumption,
+    required this.coverageDays,
     required this.nearestExpiry,
   });
 
@@ -74,11 +76,17 @@ class Medicine {
       minStock: int.tryParse(json['min_stock']?.toString() ?? '0') ?? 0,
       totalValue: double.tryParse(json['total_value']?.toString() ?? '0') ?? 0,
       avgConsumption: double.tryParse(json['avg_consumption']?.toString() ?? '0') ?? 0,
+      coverageDays: int.tryParse(json['coverage_days']?.toString() ?? '999') ?? 999,
       nearestExpiry: json['nearest_expiry'] ?? '',
     );
   }
 
   int get stock => currentStock > 0 ? currentStock : totalStock;
+  
+  String get coverageText {
+    if (coverageDays >= 999 || avgConsumption <= 0) return '-';
+    return '$coverageDays يوم';
+  }
 }
 
 class ReportData {
