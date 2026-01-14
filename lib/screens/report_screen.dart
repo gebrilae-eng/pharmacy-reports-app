@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -369,16 +370,16 @@ class _ReportScreenState extends State<ReportScreen> {
   }
 
   Future<void> _printReport() async {
-    final pdf = await _generatePdf();
-    await Printing.layoutPdf(onLayout: (format) => pdf);
+    final pdfBytes = await _generatePdf();
+    await Printing.layoutPdf(onLayout: (format) async => pdfBytes);
   }
 
   Future<void> _shareReport() async {
-    final pdf = await _generatePdf();
-    await Printing.sharePdf(bytes: pdf, filename: '$_title.pdf');
+    final pdfBytes = await _generatePdf();
+    await Printing.sharePdf(bytes: pdfBytes, filename: '$_title.pdf');
   }
 
-  Future<List<int>> _generatePdf() async {
+  Future<Uint8List> _generatePdf() async {
     final pdf = pw.Document();
     final arabicFont = await PdfGoogleFonts.cairoRegular();
     final arabicBoldFont = await PdfGoogleFonts.cairoBold();
@@ -428,7 +429,7 @@ class _ReportScreenState extends State<ReportScreen> {
       ),
     );
 
-    return pdf.save();
+    return Uint8List.fromList(await pdf.save());
   }
 
   List<String> _getHeaders() {
